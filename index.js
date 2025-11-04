@@ -3,10 +3,12 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
+
+// Allow requests from your frontend
 app.use(cors());
 app.use(express.json());
 
-// Simple route to verify the server is working
+// Simple route to verify Render is working
 app.get("/", (req, res) => {
   res.send("✅ Chess AI Server is running!");
 });
@@ -14,16 +16,16 @@ app.get("/", (req, res) => {
 app.post("/move", async (req, res) => {
   const { fen, level } = req.body;
 
-  // Map levels to realistic difficulty
+  // Define difficulty levels
   const depthMap = {
-    1: 1,   // Easy — shallow, random mistakes
-    2: 6,   // Medium — decent, makes some errors
-    3: 20,  // Hard — very strong
+    1: 4,   // Easy — makes random-ish moves
+    2: 8,   // Medium — reasonable play
+    3: 14,  // Hard — strong but fast enough
   };
-  const depth = depthMap[level] || 6;
+
+  const depth = depthMap[level] || 8; // default medium
 
   try {
-    // Ask Stockfish API for a move at the chosen depth
     const response = await fetch(
       `https://stockfish.online/api/s/v2.php?fen=${encodeURIComponent(fen)}&depth=${depth}`
     );
@@ -31,14 +33,20 @@ app.post("/move", async (req, res) => {
     const data = await response.json();
     let move = null;
 
-    // Extract the bestmove (e.g., "bestmove d2d4 ponder e7e6")
+    // Extract best move
     if (data.bestmove) {
       const parts = data.bestmove.split(" ");
       if (parts.length >= 2) move = parts[1];
     }
 
-    // Add some random blunders for Level 1
+    // Add randomness for easy level (simulates mistakes)
     if (level === 1 && data.moves && Math.random() < 0.6) {
+      const moves = data.moves.split(" ");
+      move = moves[Math.floor(Math.random() * moves.length)];
+    }
+
+    // Safety fallback: if bestmove missing, pick any legal move
+    if (!move && data.moves) {
       const moves = data.moves.split(" ");
       move = moves[Math.floor(Math.random() * moves.length)];
     }
@@ -50,8 +58,9 @@ app.post("/move", async (req, res) => {
   }
 });
 
-// Server setup
 const PORT = process.env.PORT || 10000;
+
+// Bind to 0.0.0.0 — required by Render
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
